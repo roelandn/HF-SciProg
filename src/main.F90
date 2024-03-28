@@ -17,9 +17,9 @@ program HartreeFock
 
      ! Variable naming as in the description of the exercise
      integer  :: n_AO, n_occ
-     integer  :: kappa, lambda
+     integer  :: kappa, lambda, iteration
      real(8)  :: E_HF
-     real(8), allocatable :: F(:,:),V(:,:),T(:,:),S(:,:), C(:,:), eps(:), D(:,:)
+     real(8), allocatable :: F(:,:),V(:,:),T(:,:),S(:,:), C(:,:), eps(:), D(:,:), hcore(:,:)
 
      ! The following large array can be eliminated when Fock matrix contruction is implemented
      real(8), allocatable :: ao_integrals (:,:,:,:)
@@ -47,37 +47,75 @@ program HartreeFock
      call   compute_1e_integrals ("POT",ao_basis,ao_basis,V,molecule)
 
      ! Compute the core Hamiltonian matrix (the potential is positive, we scale with -e = -1 to get to the potential energy matrix)
-     allocate (F(n_AO,n_AO))
-     F = T - V
+     allocate (hcore(n_AO,n_AO))
+     allocate (F(n_AO, n_AO))
+     hcore = T - V
+     F = hcore
 
-     ! Diagonalize the Fock matrix
      allocate (C(n_AO,n_AO))
      allocate (eps(n_AO))
+
+     allocate (D(n_AO,n_AO))
+
+     
+
+     allocate (ao_integrals(n_AO,n_AO,n_AO,n_AO))
+
+    ! Compute all 2-electron integrals
+     call generate_2int (ao_basis,ao_integrals)
+
+    do iteration = 1, 10
+     ! Diagonalize the Fock matrix
      call solve_genev (F,S,C,eps)
      print*, "Orbital energies for the core Hamiltonian:",eps
 
      ! Form the density matrix
-     allocate (D(n_AO,n_AO))
+     D = 0
      do lambda = 1, n_ao
         do kappa = 1, n_ao
            D(kappa,lambda) = sum(C(kappa,1:n_occ)*C(lambda,1:n_occ))
+           !print*, D(kappa,:)
        end do
      end do
 
      ! Compute the Hartree-Fock energy (this should be modified, see the notes)
-     E_HF = 2.D0 * sum(F*D)
-     allocate (ao_integrals(n_AO,n_AO,n_AO,n_AO))
+     !Old HF Energy
+     !E_HF = 2.D0 * sum(F*D)
      ! Compute all 2-electron integrals
-     call generate_2int (ao_basis,ao_integrals)
-     do lambda = 1, n_ao
-        do kappa = 1, n_ao
-           E_HF = E_HF + 2.D0 *  D(kappa,lambda) * sum(D*ao_integrals(:,:,kappa,lambda))
-           E_HF = E_HF - 1.D0 *  D(kappa,lambda) * sum(D*ao_integrals(:,lambda,kappa,:))
-       end do
-     end do
+    ! call generate_2int (ao_basis,ao_integrals)
+    ! do lambda = 1, n_ao
+    !    do kappa = 1, n_ao
+    !       E_HF = E_HF + 2.D0 *  D(kappa,lambda) * sum(D*ao_integrals(:,:,kappa,lambda))
+    !       E_HF = E_HF - 1.D0 *  D(kappa,lambda) * sum(D*ao_integrals(:,lambda,kappa,:))
+    !   end do
+    ! end do
    
-     print*, "The Hartree-Fock energy:    ", E_HF
+    !New HF Energy
+    F = hcore
+    
 
+
+    do lambda = 1, n_ao
+      do kappa = 1, n_ao
+        !Compute Fock matrix
+        F(kappa, lambda) = F(kappa, lambda) + 2.D0 * sum(D*ao_integrals(kappa, lambda, :, :))
+        F(kappa, lambda) = F(kappa, lambda) - 1.D0 * sum(D*ao_integrals(kappa, :, :, lambda))  
+      end do
+    end do
+
+    E_HF = sum((hcore+F)*D) 
+
+
+     print*, "The Hartree-Fock energy:    ", E_HF
+  
+    if(.false.) then
+      write(*,*) "Converged"
+    else
+      !Construct new density matrix from spinors
+
+    end if
+
+  end do
    end
 
    subroutine define_molecule(molecule)
@@ -100,10 +138,12 @@ program HartreeFock
      use ao_basis
      type(basis_set_info_t), intent(inout) :: ao_basis
      type(basis_func_info_t) :: gto
-     ! Be:  2 uncontracted s-funs:    l      coord          exp      
+     ! Be:  3 uncontracted s-funs:    l      coord          exp      
+     call add_shell_to_basis(ao_basis,0,(/0.D0,0.D0,0.D0/),8.D0)
      call add_shell_to_basis(ao_basis,0,(/0.D0,0.D0,0.D0/),4.D0)
      call add_shell_to_basis(ao_basis,0,(/0.D0,0.D0,0.D0/),1.D0)
-     ! He:  1 uncontracted s-fun:     l      coord          exp      
+     ! He:  2 uncontracted s-fun:     l      coord          exp      
+     call add_shell_to_basis(ao_basis,0,(/2.D0,0.D0,0.D0/),4.D0)
      call add_shell_to_basis(ao_basis,0,(/2.D0,0.D0,0.D0/),1.D0)
    end subroutine
 

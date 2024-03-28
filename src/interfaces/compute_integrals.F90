@@ -128,9 +128,10 @@ module compute_integrals
      integer :: ish, jsh, ksh, lsh, i, j, k, l, ioff, joff, koff, loff
      integer :: iang, jang, kang, lang, nang_i, nang_j, nang_k, nang_l
      integer :: npri_i, npri_j, npri_k, npri_l
-
+     !The code threw a memory error out-of-box, but adding this empty debug line fixed the problem. For some reason. Cool.
+     WRITE(*,*) ""
      call interest_initialize()
-
+     
      loff = 0
      do lsh = 1, ao_basis%nshells
       nang_l = n_ang(ao_basis%gtos(lsh)%orb_momentum)
