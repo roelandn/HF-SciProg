@@ -15,7 +15,6 @@ program HartreeFock
      ! Variable containing the atomic orbital basis
      type(basis_set_info_t) :: ao_basis
 
-     ! Variable naming as in the description of the exercise
      integer  :: n_AO, n_occ
      integer  :: kappa, lambda, iteration
      real(8)  :: E_HF
@@ -26,7 +25,9 @@ program HartreeFock
      ! The following large array can be eliminated when Fock matrix contruction is implemented
      real(8), allocatable :: ao_integrals (:,:,:,:)
      integer, parameter :: max_iterations = 50
+     
      ! Definition of the molecule
+     call read_xyz()
      call define_molecule(molecule)
 
      ! Definition of the GTOs
@@ -37,7 +38,7 @@ program HartreeFock
      n_occ = 3 ! hardwired for this demonstration program, should be set via input
 
      !Convergence requirement
-    conv = 0.001
+    conv = 0.0001
 
      ! Compute the overlap matrix
      allocate (S(n_AO,n_AO))
@@ -62,8 +63,6 @@ program HartreeFock
 
      allocate (D(n_AO,n_AO))
 
-     
-
      allocate (ao_integrals(n_AO,n_AO,n_AO,n_AO))
 
     ! Compute all 2-electron integrals
@@ -72,7 +71,7 @@ program HartreeFock
     do iteration = 1, max_iterations
      ! Diagonalize the Fock matrix
      call solve_genev (F,S,C,eps)
-     !print*, "Orbital energies for the core Hamiltonian:",eps
+     print*, "Orbital energies for the core Hamiltonian:",eps
 
      ! Form the density matrix
      D = 0
@@ -91,21 +90,19 @@ program HartreeFock
       end do
     end do
     E_HF = sum((hcore+F)*D) 
-
-
-    print*, "The Hartree-Fock energy:    ", E_HF
   
     Dn = sqrt(sum((matmul(F,D)-matmul(D,F))**2))
-    print*,Dn
 
     if(abs(Dn-Dnm1).le.conv) then
-      write(*,*) "Converged"
+      write(*,*) "Converged with dDn = ", Dn
       exit
     else
       Dnm1 = Dn
     end if
 
   end do
+
+  print*, "The Hartree-Fock energy:    ", E_HF
    end
 
    subroutine define_molecule(molecule)
@@ -137,4 +134,38 @@ program HartreeFock
      call add_shell_to_basis(ao_basis,0,(/2.D0,0.D0,0.D0/),1.D0)
    end subroutine
 
-   
+   subroutine read_xyz()
+      implicit none
+      integer :: i, len, io
+      
+      character, allocatable :: atoms(:)
+      character :: table(10)
+      real(8), allocatable :: charge(:), coords(:,:)
+
+      table = (/"H ", "He", "Li", "Be", "B ", "C ", "N ", "O ", "F ", "Ne"/)
+
+      open(10, file="mol.xyz")
+
+      !Determine the length of the xyz file first
+      len = 0
+      do
+        read(10, *, iostat=io)
+        if(io/=0) exit
+        len = len + 1
+      end do
+
+      allocate(charge(len-2))
+      allocate(atoms(len-2))
+      allocate(coords(len-2, 3))
+
+      !Discard first two lines of xyz file
+      rewind 10
+      read(10,*)
+      read(10,*)
+      !Read in atom element and (x,y,z) coordinates
+      do i=1, len-2
+        read(10,*) atoms(i), coords(i, 1), coords(i, 2), coords(i, 3)
+        charge(i) = findloc(table, trim(atoms(i)), 1)
+      end do
+
+   end subroutine
