@@ -21,9 +21,11 @@ program HartreeFock
      real(8)  :: E_HF
      real(8), allocatable :: F(:,:),V(:,:),T(:,:),S(:,:), C(:,:), eps(:), D(:,:), hcore(:,:)
 
+    real(8) :: Dn, Dnm1=0.D0, conv
+
      ! The following large array can be eliminated when Fock matrix contruction is implemented
      real(8), allocatable :: ao_integrals (:,:,:,:)
-   
+     integer, parameter :: max_iterations = 50
      ! Definition of the molecule
      call define_molecule(molecule)
 
@@ -33,6 +35,9 @@ program HartreeFock
    
      ! Definition of the number of occupied orbitals
      n_occ = 3 ! hardwired for this demonstration program, should be set via input
+
+     !Convergence requirement
+    conv = 0.001
 
      ! Compute the overlap matrix
      allocate (S(n_AO,n_AO))
@@ -64,10 +69,10 @@ program HartreeFock
     ! Compute all 2-electron integrals
      call generate_2int (ao_basis,ao_integrals)
 
-    do iteration = 1, 10
+    do iteration = 1, max_iterations
      ! Diagonalize the Fock matrix
      call solve_genev (F,S,C,eps)
-     print*, "Orbital energies for the core Hamiltonian:",eps
+     !print*, "Orbital energies for the core Hamiltonian:",eps
 
      ! Form the density matrix
      D = 0
@@ -77,42 +82,27 @@ program HartreeFock
            !print*, D(kappa,:)
        end do
      end do
-
-     ! Compute the Hartree-Fock energy (this should be modified, see the notes)
-     !Old HF Energy
-     !E_HF = 2.D0 * sum(F*D)
-     ! Compute all 2-electron integrals
-    ! call generate_2int (ao_basis,ao_integrals)
-    ! do lambda = 1, n_ao
-    !    do kappa = 1, n_ao
-    !       E_HF = E_HF + 2.D0 *  D(kappa,lambda) * sum(D*ao_integrals(:,:,kappa,lambda))
-    !       E_HF = E_HF - 1.D0 *  D(kappa,lambda) * sum(D*ao_integrals(:,lambda,kappa,:))
-    !   end do
-    ! end do
-   
-    !New HF Energy
+    !Compute Fock matrix
     F = hcore
-    
-
-
     do lambda = 1, n_ao
       do kappa = 1, n_ao
-        !Compute Fock matrix
         F(kappa, lambda) = F(kappa, lambda) + 2.D0 * sum(D*ao_integrals(kappa, lambda, :, :))
         F(kappa, lambda) = F(kappa, lambda) - 1.D0 * sum(D*ao_integrals(kappa, :, :, lambda))  
       end do
     end do
-
     E_HF = sum((hcore+F)*D) 
 
 
-     print*, "The Hartree-Fock energy:    ", E_HF
+    print*, "The Hartree-Fock energy:    ", E_HF
   
-    if(.false.) then
-      write(*,*) "Converged"
-    else
-      !Construct new density matrix from spinors
+    Dn = sqrt(sum((matmul(F,D)-matmul(D,F))**2))
+    print*,Dn
 
+    if(abs(Dn-Dnm1).le.conv) then
+      write(*,*) "Converged"
+      exit
+    else
+      Dnm1 = Dn
     end if
 
   end do
