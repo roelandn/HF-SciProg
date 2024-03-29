@@ -70,7 +70,7 @@ program HartreeFock
      write(*,'(A5, 2A25, A15)') "i", "E", "dDn", "CPU time"
     do iteration = 1, max_iterations
 
-      call cpu_time(start_step)
+    call cpu_time(start_step)
 
      ! Diagonalize the Fock matrix
      call solve_genev (F,S,C,eps)
