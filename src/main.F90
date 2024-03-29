@@ -1,13 +1,13 @@
 program HartreeFock
 
-   ! Demonstration program that can be used as a starting point
-   ! Lucas Visscher, March 2022
+   ! Hartree-Fock implementation
+   ! Roeland Neugarten, March 2024
 
    use molecular_structure
    use ao_basis
    use compute_integrals
    use diagonalization
-
+   use define_system
      implicit none
 
      ! Variable containing the molecular structure
@@ -26,19 +26,15 @@ program HartreeFock
      real(8), allocatable :: ao_integrals (:,:,:,:)
      integer, parameter :: max_iterations = 50
      
-     ! Definition of the molecule
-     call read_xyz()
-     call define_molecule(molecule)
+     ! Definition of the molecule and GTOs
+     call read_xyz(molecule, ao_basis, n_occ, conv)
 
-     ! Definition of the GTOs
-     call define_basis(ao_basis)
      n_AO = ao_basis%nao
-   
-     ! Definition of the number of occupied orbitals
-     n_occ = 3 ! hardwired for this demonstration program, should be set via input
 
-     !Convergence requirement
-    conv = 0.0001
+     print*, "N_occ = ", n_occ
+     print*, "N_AO  = ", n_AO
+     print*, ""
+     print*, "Convergence requirement = ", conv
 
      ! Compute the overlap matrix
      allocate (S(n_AO,n_AO))
@@ -71,16 +67,15 @@ program HartreeFock
     do iteration = 1, max_iterations
      ! Diagonalize the Fock matrix
      call solve_genev (F,S,C,eps)
-     print*, "Orbital energies for the core Hamiltonian:",eps
 
      ! Form the density matrix
      D = 0
      do lambda = 1, n_ao
         do kappa = 1, n_ao
            D(kappa,lambda) = sum(C(kappa,1:n_occ)*C(lambda,1:n_occ))
-           !print*, D(kappa,:)
        end do
      end do
+     
     !Compute Fock matrix
     F = hcore
     do lambda = 1, n_ao
@@ -89,14 +84,17 @@ program HartreeFock
         F(kappa, lambda) = F(kappa, lambda) - 1.D0 * sum(D*ao_integrals(kappa, :, :, lambda))  
       end do
     end do
+
     E_HF = sum((hcore+F)*D) 
   
+    !Compute convergence with norm of [F,D] commutator
     Dn = sqrt(sum((matmul(F,D)-matmul(D,F))**2))
 
     if(abs(Dn-Dnm1).le.conv) then
       write(*,*) "Converged with dDn = ", Dn
       exit
     else
+      write(*,*) iteration, " E = ", E_HF, "dDn = ", Dn
       Dnm1 = Dn
     end if
 
@@ -104,68 +102,3 @@ program HartreeFock
 
   print*, "The Hartree-Fock energy:    ", E_HF
    end
-
-   subroutine define_molecule(molecule)
-     ! This routine should be improved such that an arbitrary molecule can be given as input
-     ! the coordinates below are for a be-he dimer oriented along the x-axis with a bond length of 2 au
-     use molecular_structure
-     type(molecular_structure_t), intent(inout) :: molecule
-     real(8) :: charge(2),coord(3,2)
-     charge(1)   = 4.D0
-     charge(2)   = 2.D0
-     coord       = 0.D0
-     coord(1,2)  = 2.D0
-     call add_atoms_to_molecule(molecule,charge,coord)
-   end subroutine
-
-   subroutine define_basis(ao_basis)
-    ! This routine can be extended to use better basis sets 
-    ! The coordinates of the shell centers are the nuclear coordinates
-    ! Think of a refactoring of define_molecule and define_basis to ensure consistency 
-     use ao_basis
-     type(basis_set_info_t), intent(inout) :: ao_basis
-     type(basis_func_info_t) :: gto
-     ! Be:  3 uncontracted s-funs:    l      coord          exp      
-     call add_shell_to_basis(ao_basis,0,(/0.D0,0.D0,0.D0/),8.D0)
-     call add_shell_to_basis(ao_basis,0,(/0.D0,0.D0,0.D0/),4.D0)
-     call add_shell_to_basis(ao_basis,0,(/0.D0,0.D0,0.D0/),1.D0)
-     ! He:  2 uncontracted s-fun:     l      coord          exp      
-     call add_shell_to_basis(ao_basis,0,(/2.D0,0.D0,0.D0/),4.D0)
-     call add_shell_to_basis(ao_basis,0,(/2.D0,0.D0,0.D0/),1.D0)
-   end subroutine
-
-   subroutine read_xyz()
-      implicit none
-      integer :: i, len, io
-      
-      character, allocatable :: atoms(:)
-      character :: table(10)
-      real(8), allocatable :: charge(:), coords(:,:)
-
-      table = (/"H ", "He", "Li", "Be", "B ", "C ", "N ", "O ", "F ", "Ne"/)
-
-      open(10, file="mol.xyz")
-
-      !Determine the length of the xyz file first
-      len = 0
-      do
-        read(10, *, iostat=io)
-        if(io/=0) exit
-        len = len + 1
-      end do
-
-      allocate(charge(len-2))
-      allocate(atoms(len-2))
-      allocate(coords(len-2, 3))
-
-      !Discard first two lines of xyz file
-      rewind 10
-      read(10,*)
-      read(10,*)
-      !Read in atom element and (x,y,z) coordinates
-      do i=1, len-2
-        read(10,*) atoms(i), coords(i, 1), coords(i, 2), coords(i, 3)
-        charge(i) = findloc(table, trim(atoms(i)), 1)
-      end do
-
-   end subroutine
