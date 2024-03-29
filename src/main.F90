@@ -17,6 +17,7 @@ program HartreeFock
 
      integer  :: n_AO, n_occ
      integer  :: kappa, lambda, iteration
+     real(8)  :: start, finish, start_step, finish_step
      real(8)  :: E_HF
      real(8), allocatable :: F(:,:),V(:,:),T(:,:),S(:,:), C(:,:), eps(:), D(:,:), hcore(:,:)
 
@@ -26,6 +27,8 @@ program HartreeFock
      real(8), allocatable :: ao_integrals (:,:,:,:)
      integer, parameter :: max_iterations = 50
      
+     call cpu_time(start)
+
      ! Definition of the molecule and GTOs
      call read_xyz(molecule, ao_basis, n_occ, conv)
 
@@ -64,7 +67,11 @@ program HartreeFock
     ! Compute all 2-electron integrals
      call generate_2int (ao_basis,ao_integrals)
 
+     write(*,'(A5, 2A25, A15)') "i", "E", "dDn", "CPU time"
     do iteration = 1, max_iterations
+
+      call cpu_time(start_step)
+
      ! Diagonalize the Fock matrix
      call solve_genev (F,S,C,eps)
 
@@ -94,11 +101,14 @@ program HartreeFock
       write(*,*) "Converged with dDn = ", Dn
       exit
     else
-      write(*,*) iteration, " E = ", E_HF, "dDn = ", Dn
+      call cpu_time(finish_step)
+      write(*,'(I5,2F25.13,F15.6)') iteration, E_HF, Dn, finish_step-start_step
       Dnm1 = Dn
     end if
-
+    
   end do
 
+  call cpu_time(finish)
+  print*, "Calculation time:           ", finish-start, "seconds"
   print*, "The Hartree-Fock energy:    ", E_HF
    end
